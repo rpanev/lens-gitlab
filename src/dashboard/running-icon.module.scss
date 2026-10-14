@@ -1,0 +1,19 @@
+// A ring with a turning arc, as GitHub shows a run in progress.
+.running {
+  display: inline-flex;
+  flex-shrink: 0;
+  animation: turn 1s linear infinite;
+}
+
+@keyframes turn {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+// Turning is motion: someone who asked for less of it sees the ring still.
+@media (prefers-reduced-motion: reduce) {
+  .running {
+    animation: none;
+  }
+}

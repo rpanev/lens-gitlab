@@ -1,0 +1,8 @@
+dist/
+node_modules/
+*.tsbuildinfo
+coverage/
+*.log
+.claude/skills/lens-*/
+.agents/skills/lens-*/
+.claude/settings.json

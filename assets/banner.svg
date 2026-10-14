@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 600" width="1200" height="600">
+  <defs>
+    <linearGradient id="background" x1="0" y1="0.5" x2="1" y2="0.5">
+      <stop offset="0" stop-color="#5c2418"/>
+      <stop offset="1" stop-color="#e24329"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="600" fill="url(#background)"/>
+  <g transform="translate(250 188)" fill="none" stroke="#ffffff" stroke-width="14" stroke-linejoin="round">
+    <path d="M112 18 L198 68 V178 L112 228 L26 178 V68 Z"/>
+  </g>
+  <path transform="translate(250 188)" d="M112 88 L148 124 L112 160 L76 124 Z" fill="#ffffff"/>
+  <text x="500" y="292" font-family="sans-serif" font-size="84" font-weight="700" fill="#ffffff">GitLabOps</text>
+  <text x="500" y="352" font-family="sans-serif" font-size="32" fill="#f6d2c4">Pipelines next to the cluster</text>
+</svg>
