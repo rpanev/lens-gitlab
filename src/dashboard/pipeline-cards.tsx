@@ -4,14 +4,15 @@ import { PlainButton } from "@k8slens/input-components";
 import { useInject } from "@k8slens/use-inject";
 import { observer } from "mobx-react";
 import { useEffect } from "react";
-import { openVersionInjectable } from "../workflow-runs/open-version.injectable";
-import { rerunFailedJobsInjectable } from "../workflow-runs/rerun-failed-jobs.injectable";
-import { durationOf, failedStepOf, isFailed, type RunJob } from "../workflow-runs/run-jobs";
-import { runJobsInjectable } from "../workflow-runs/run-jobs.injectable";
-import { opensByDefault, runStatusOf } from "../workflow-runs/run-status";
-import { barOf, formatSpan, spanOf, stepSegmentsOf, type TimeSpan } from "../workflow-runs/run-timeline";
-import { summaryOf, type VersionRuns } from "../workflow-runs/version";
-import { runUrlOf, type WorkflowRun } from "../workflow-runs/workflow-run";
+import { openVersionInjectable } from "../pipelines/open-version.injectable";
+import { playManualJobInjectable } from "../pipelines/play-job.injectable";
+import { rerunFailedJobsInjectable } from "../pipelines/rerun-failed-jobs.injectable";
+import { durationOf, failedStepOf, isFailed, type RunJob } from "../pipelines/run-jobs";
+import { runJobsInjectable } from "../pipelines/run-jobs.injectable";
+import { opensByDefault, runStatusOf } from "../pipelines/run-status";
+import { barOf, formatSpan, spanOf, stepSegmentsOf, type TimeSpan } from "../pipelines/run-timeline";
+import { summaryOf, type VersionRuns } from "../pipelines/version";
+import { runUrlOf, type Pipeline } from "../pipelines/pipeline";
 import { expandedInjectable } from "./expanded.injectable";
 import { FailedLog } from "./failed-log";
 import { RunStatusIcon } from "./run-status-icon";
@@ -22,7 +23,7 @@ const Toggle = ({ open, onToggle, label }: { open: boolean; onToggle: () => void
   </Button>
 );
 
-/** Where a job ran within its workflow, as a bar on a track: parallel and slow jobs stand out. */
+/** Where a job ran within its pipeline, as a bar on a track: parallel and slow jobs stand out. */
 const TimelineBar = ({ job, span }: { job: RunJob; span?: TimeSpan }) => {
   const bar = span && barOf(job, span);
 
@@ -82,19 +83,24 @@ const JobLine = observer(
     host,
     project,
     job,
+    version,
     span,
     place,
     compact,
+    onPlayed,
   }: {
     host: string;
     project: string;
     job: RunJob;
+    version: string;
     span?: TimeSpan;
     place: string;
     compact: boolean;
+    onPlayed: () => void;
   }) => {
     const expanded = useInject(expandedInjectable)(place);
     const openLink = useInject(openVersionInjectable)();
+    const playManualJob = useInject(playManualJobInjectable)();
     const id = `job:${job.databaseId}`;
     const open = !compact && expanded.isOpen(id, isFailed(job));
     const failedStep = failedStepOf(job);
@@ -120,8 +126,19 @@ const JobLine = observer(
           </A>
           <TimelineBar job={job} span={span} />
           <Span $color="textMuted" $textAlign="right" $style={{ minWidth: 64 }}>
-            {durationOf(job) ?? "queued"}
+            {job.status === "manual" ? "manual" : (durationOf(job) ?? "queued")}
           </Span>
+          {job.status === "manual" && (
+            <PlainButton
+              onClick={() =>
+                void playManualJob(host, project, job.databaseId, job.name, version).then((played) => {
+                  if (played) onPlayed();
+                })
+              }
+            >
+              Play
+            </PlainButton>
+          )}
         </Div>
         {failedStep && !open && (
           <Span $color="critical" $padding={{ left: "3xl" }}>
@@ -151,7 +168,7 @@ const RunCard = observer(
   }: {
     host: string;
     project: string;
-    run: WorkflowRun;
+    run: Pipeline;
     version: string;
     onRerun: () => void;
     place: string;
@@ -173,7 +190,7 @@ const RunCard = observer(
     useEffect(() => jobs.watch(`${run.status}/${run.conclusion}`), [jobs, run.status, run.conclusion]);
 
     const rerun = async () => {
-      if (await rerunFailedJobs(host, project, run.databaseId, run.workflowName, version)) {
+      if (await rerunFailedJobs(host, project, run.databaseId, run.name, version)) {
         onRerun();
         void jobs.refresh();
       }
@@ -195,7 +212,7 @@ const RunCard = observer(
             $color="link"
             $font={compact ? undefined : { size: "l" }}
           >
-            {run.workflowName}
+            {run.name}
           </A>
           <Span $color="textMuted">{status.label}</Span>
           {span && <Span $color="textMuted">· {formatSpan(span.end - span.start)}</Span>}
@@ -221,9 +238,14 @@ const RunCard = observer(
               host={host}
               project={project}
               job={job}
+              version={version}
               span={span}
               place={place}
               compact={compact}
+              onPlayed={() => {
+                onRerun();
+                void jobs.refresh();
+              }}
             />
           ))}
       </Div>
@@ -250,7 +272,7 @@ const Summary = ({ row }: { row: VersionRuns }) => {
  * compact, as the details panel gives a quick look under the version's own properties, a job is its line
  * alone and the version's message is left to those properties.
  */
-export const WorkflowRunCards = ({
+export const PipelineCards = ({
   host,
   project,
   row,

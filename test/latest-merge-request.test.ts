@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { latestMergeRequestOf, mergeStandingOf } from "../src/workflow-runs/latest-merge-request";
+import { latestMergeRequestOf, mergeStandingOf } from "../src/pipelines/latest-merge-request";
 import { run, sha } from "./fixtures";
 
 const request = (state: string, status?: string, extra: Record<string, string> = {}) => ({

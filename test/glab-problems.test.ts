@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { glabProblemOf } from "../src/workflow-runs/glab-problems";
+import { glabProblemOf } from "../src/pipelines/glab-problems";
 
 describe("glabProblemOf", () => {
   it.each([

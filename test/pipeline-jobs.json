@@ -25,7 +25,7 @@
           "status": "completed"
         }
       ],
-      "url": "https://github.com/example-org/app/actions/runs/1/job/11"
+      "url": "https://gitlab.com/example-org/app/-/jobs/11"
     },
     {
       "completedAt": "2026-10-01T08:02:10Z",
@@ -52,7 +52,7 @@
           "status": "completed"
         }
       ],
-      "url": "https://github.com/example-org/app/actions/runs/1/job/12"
+      "url": "https://gitlab.com/example-org/app/-/jobs/12"
     }
   ]
 }

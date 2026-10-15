@@ -8,6 +8,8 @@ export interface WorkloadStatus {
   readonly desired: number;
   /** When it last settled, for a Deployment, the only kind that records it: see Workload's settledAt. */
   readonly settledAt?: string;
+  /** The rollout did not finish: ProgressDeadlineExceeded. */
+  readonly stalled?: boolean;
 }
 
 interface Condition {
@@ -34,6 +36,9 @@ export const deploymentStatusOf = (deployment: {
   const settled = status.conditions?.find(
     (condition) => condition.type === "Progressing" && condition.reason === "NewReplicaSetAvailable",
   );
+  const stalled = status.conditions?.some(
+    (condition) => condition.type === "Progressing" && condition.reason === "ProgressDeadlineExceeded",
+  );
   return {
     rolledOut:
       (status.observedGeneration ?? 0) >= (deployment.metadata.generation ?? 0) &&
@@ -42,6 +47,7 @@ export const deploymentStatusOf = (deployment: {
     ready: status.readyReplicas ?? 0,
     desired,
     settledAt: settled?.lastUpdateTime,
+    ...(stalled ? { stalled: true } : {}),
   };
 };
 

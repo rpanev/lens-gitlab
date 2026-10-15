@@ -6,8 +6,8 @@ import { type ImageMatches, type Service, servicesOf, versionsRunningOf } from "
 import { type GitOpsSync, gitOpsSyncsOf, syncsOfVersion, type VersionSync } from "../deployments/gitops-syncs";
 import { servicesOfVersion, type VersionService } from "../deployments/version-services";
 import { hostOf, isReleasesWatch, watchOfKey } from "../watched-repositories/watched-repository";
-import { trackActivityInjectable } from "../workflow-runs/track-activity.injectable";
-import type { VersionRuns } from "../workflow-runs/version";
+import { trackActivityInjectable } from "../pipelines/track-activity.injectable";
+import type { VersionRuns } from "../pipelines/version";
 
 export interface VersionRow extends VersionRuns {
   /** Undefined while the cluster is still being read, or when it could not be. */
@@ -34,7 +34,7 @@ export const watchOnClusterInjectable = getInjectable2({
     const trackActivityOf = di.inject(trackActivityInjectable);
     const clusterImagesOf = di.inject(clusterImagesInjectable);
 
-    return (clusterId: string, watchKey: string) => {
+    const open = (clusterId: string, watchKey: string) => {
       const activity = trackActivityOf(watchKey);
       const clusterImages = clusterImagesOf(clusterId);
       const watch = watchOfKey(watchKey);
@@ -108,6 +108,22 @@ export const watchOnClusterInjectable = getInjectable2({
           };
         },
       };
+    };
+
+    const byClusterWatch = new Map<string, ReturnType<typeof open>>();
+
+    // One reading per cluster and watch, so the dashboard and the promotion columns share it.
+    return (clusterId: string, watchKey: string) => {
+      const key = `${clusterId}\n${watchKey}`;
+      const kept = byClusterWatch.get(key);
+
+      if (kept) return kept;
+
+      const created = open(clusterId, watchKey);
+
+      byClusterWatch.set(key, created);
+
+      return created;
     };
   },
 });

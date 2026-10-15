@@ -1,8 +1,8 @@
 import { readFileSync } from "node:fs";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { rerunFailedJobsInjectable } from "../src/workflow-runs/rerun-failed-jobs.injectable";
-import { durationOf, failedStepOf, isFinished, runJobsSchema } from "../src/workflow-runs/run-jobs";
-import { runJobsInjectable } from "../src/workflow-runs/run-jobs.injectable";
+import { rerunFailedJobsInjectable } from "../src/pipelines/rerun-failed-jobs.injectable";
+import { durationOf, failedStepOf, isFinished, runJobsSchema } from "../src/pipelines/run-jobs";
+import { runJobsInjectable } from "../src/pipelines/run-jobs.injectable";
 
 describe("durationOf", () => {
   it.each([
@@ -32,13 +32,13 @@ describe("failedStepOf", () => {
 });
 
 describe("runJobsSchema", () => {
-  it("reads what gh run view --json jobs prints", () => {
+  it("reads a pipeline's jobs", () => {
     const { jobs } = runJobsSchema.parse(
-      JSON.parse(readFileSync(new URL("./gh-run-jobs.json", import.meta.url), "utf8")),
+      JSON.parse(readFileSync(new URL("./pipeline-jobs.json", import.meta.url), "utf8")),
     );
 
     expect(jobs.length).toBeGreaterThan(0);
-    expect(jobs.every((job) => job.url.startsWith("https://github.com/"))).toBe(true);
+    expect(jobs.every((job) => job.url.startsWith("https://gitlab.com/"))).toBe(true);
   });
 });
 

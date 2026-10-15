@@ -8,7 +8,7 @@ import {
 } from "@k8slens/table-contracts";
 import { useInject } from "@k8slens/use-inject";
 import type { Workload } from "../deployments/cluster-images";
-import { openVersionInjectable } from "../workflow-runs/open-version.injectable";
+import { openVersionInjectable } from "../pipelines/open-version.injectable";
 import { isReleasesWatch, watchOfKey } from "../watched-repositories/watched-repository";
 import { type ServiceRow, serviceLookOf, serviceStatusOf } from "./flux-stage";
 import { columnHeader, getWatchRowsBunch, type WatchTableParams } from "./watch-table";

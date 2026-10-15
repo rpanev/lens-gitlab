@@ -1,6 +1,6 @@
 import { Div, Span } from "@k8slens/element-components";
-import { runStatusOf } from "../workflow-runs/run-status";
-import type { WorkflowRun } from "../workflow-runs/workflow-run";
+import { runStatusOf } from "../pipelines/run-status";
+import type { Pipeline } from "../pipelines/pipeline";
 import { RunStatusIcon } from "./run-status-icon";
 
 export const CommitRunsTooltip = ({
@@ -8,7 +8,7 @@ export const CommitRunsTooltip = ({
   runsOn,
   others = 0,
 }: {
-  runs: readonly WorkflowRun[];
+  runs: readonly Pipeline[];
   runsOn?: string;
   /** How many runs it did not start were recorded against it too. */
   others?: number;
@@ -21,7 +21,7 @@ export const CommitRunsTooltip = ({
       return (
         <Div key={run.databaseId} $flex={{ direction: "horizontal", gap: "s", verticalAlign: "center" }}>
           <RunStatusIcon status={status} />
-          <Span>{run.workflowName}</Span>
+          <Span>{run.name}</Span>
           <Span $color="textMuted">{status.label}</Span>
         </Div>
       );

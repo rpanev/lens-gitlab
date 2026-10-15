@@ -19,10 +19,15 @@ export interface ApplicationStatus {
   readonly operationState?: {
     readonly phase?: string;
     readonly message?: string;
+    readonly finishedAt?: string;
     readonly operation?: { readonly sync?: { readonly revision?: string; readonly revisions?: readonly string[] } };
     readonly syncResult?: { readonly revision?: string; readonly revisions?: readonly string[] };
   };
-  readonly history?: readonly { readonly revision?: string; readonly revisions?: readonly string[] }[];
+  readonly history?: readonly {
+    readonly revision?: string;
+    readonly revisions?: readonly string[];
+    readonly deployedAt?: string;
+  }[];
   readonly conditions?: readonly { readonly type: string; readonly message?: string }[];
 }
 
@@ -80,6 +85,18 @@ export const argoCommitsOf = ({ operationState, history, sync }: ApplicationStat
   };
 };
 
+/** When Argo CD deployed a revision: its history entry, or the sync that just succeeded. */
+export const argoAppliedAt = (status: ApplicationStatus | undefined, applied?: string) => {
+  const entry = status?.history?.find(
+    (item) => item.deployedAt && (item.revision === applied || item.revisions?.includes(applied ?? "")),
+  );
+
+  if (entry?.deployedAt) return entry.deployedAt;
+  if (status?.operationState?.phase === "Succeeded") return status.operationState.finishedAt;
+
+  return undefined;
+};
+
 const isCommitId = (revision?: string) => !!revision && /^[0-9a-f]{40}$/.test(revision);
 
 /** The branch a target revision names; none for "HEAD" or nothing, which follow the repository's default branch. */
@@ -118,6 +135,7 @@ export const applicationResourceOf = (application: {
       : undefined,
     // A chart from a chart repository is at a version: what was synced, and what is to be.
     chart: fromChartRepository ? { applied: applied ?? target, attempted: target } : undefined,
+    appliedAt: argoAppliedAt(application.status, applied),
   };
 };
 

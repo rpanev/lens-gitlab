@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { browserUrlOf, urlOnHost } from "../src/workflow-runs/browser-url";
-import { glabProblemOf } from "../src/workflow-runs/glab-problems";
+import { browserUrlOf, urlOnHost } from "../src/pipelines/browser-url";
+import { glabProblemOf } from "../src/pipelines/glab-problems";
 
 describe("urlOnHost", () => {
   it("keeps a page on the watched host", () => {

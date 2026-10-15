@@ -2,10 +2,10 @@ import { getInjectable2 } from "@k8slens/injectable";
 import { z } from "zod";
 import { hostOf, isPrereleaseTag, isReleasesWatch, tagMatches, type WatchedRepository } from "../watched-repositories/watched-repository";
 import { urlOnHost } from "./browser-url";
-import { glabInjectable } from "./glab.injectable";
+import { type Glab, glabInjectable } from "./glab.injectable";
 import { latestMergeRequestOf, type LatestMergeRequest } from "./latest-merge-request";
 import { toVersionRuns, type Version, type VersionRuns } from "./version";
-import { runsOfCommitWith, toWorkflowRun, type GitlabPipeline, type WorkflowRun } from "./workflow-run";
+import { runsOfCommitWith, toPipeline, type GitlabPipeline, type Pipeline } from "./pipeline";
 
 /** How far back a running service can be placed. */
 export const versionsAsked = 30;
@@ -15,6 +15,11 @@ const releasesAskedForPattern = 100;
 export const versionsWithRuns = 5;
 const pipelinesAskedPerCommit = 20;
 const latestPipelinesAsked = 100;
+/**
+ * How long a GitLab answer is reused for the same host, project and ref. Shorter than the live check,
+ * so that check still asks again; long enough that another cluster watching the same project does not.
+ */
+const sharedResultFreshMs = 14_000;
 
 const pipelineSchema = z.object({
   id: z.number(),
@@ -24,6 +29,7 @@ const pipelineSchema = z.object({
   source: z.string(),
   name: z.string().nullish(),
   web_url: z.string().nullish(),
+  finished_at: z.string().nullish(),
 });
 
 const commitSchema = z.object({
@@ -64,6 +70,72 @@ const projectIdOf = (project: string) => encodeURIComponent(project);
 
 const apiOf = (project: string, rest = "") => `projects/${projectIdOf(project)}${rest}`;
 
+/** One GraphQL query for a project's latest pipelines. The path is turned into `glab api graphql` by the client. */
+const latestPipelinesPath = (project: string) => {
+  const params = new URLSearchParams({ fullPath: project, pipelines: String(latestPipelinesAsked) });
+
+  return `graphql?${params.toString()}`;
+};
+
+const graphqlNodeSchema = z.object({
+  id: z.string(),
+  sha: z.string().nullish(),
+  ref: z.string().nullish(),
+  status: z.string().nullish(),
+  source: z.string().nullish(),
+  name: z.string().nullish(),
+  finishedAt: z.string().nullish(),
+});
+
+const graphqlPipelinesSchema = z.object({
+  data: z
+    .object({
+      project: z
+        .object({
+          pipelines: z.object({
+            nodes: z.array(graphqlNodeSchema.nullable()),
+          }),
+        })
+        .nullable(),
+    })
+    .nullish(),
+  errors: z.array(z.object({ message: z.string() })).optional(),
+});
+
+/** The latest pipelines GraphQL returned, as the same shape the REST list uses. Newest first. */
+const pipelinesFromGraphql = (payload: unknown, host: string, project: string): GitlabPipeline[] => {
+  const parsed = graphqlPipelinesSchema.parse(payload);
+
+  if (parsed.errors?.length) throw new Error(parsed.errors.map((error) => error.message).join("; "));
+
+  const found = parsed.data?.project;
+
+  if (!found) throw new Error(`404 Project Not Found: ${project}`);
+
+  return found.pipelines.nodes.flatMap((node) => {
+    if (!node?.sha || !node.ref || !node.status) return [];
+
+    const id = Number(node.id.split("/").pop());
+
+    if (!Number.isInteger(id)) return [];
+
+    const source = (node.source ?? "push").toLowerCase();
+
+    return [
+      {
+        id,
+        sha: node.sha,
+        ref: node.ref,
+        status: node.status.toLowerCase(),
+        source,
+        name: node.name,
+        finished_at: node.finishedAt,
+        web_url: `https://${host}/${project}/-/pipelines/${id}`,
+      },
+    ];
+  });
+};
+
 /** Where a version's page is, when GitLab did not say. */
 const pageUrl = (host: string, project: string, kind: "commit" | "releases", id: string) =>
   `https://${host}/${project}/-/${kind}/${encodeURIComponent(id)}`;
@@ -72,8 +144,51 @@ export const trackSourcesInjectable = getInjectable2({
   id: "lens-gitlab-track-sources",
 
   instantiate: (di) => {
-    const glab = di.inject(glabInjectable)();
-    const glabJson = async (host: string, path: string) => JSON.parse(await glab(host, path));
+    const glab: Glab = di.inject(glabInjectable)();
+    const remembered = new Map<string, { at: number; value: unknown }>();
+    const inFlight = new Map<string, Promise<unknown>>();
+
+    /**
+     * One answer per host and request, shared by every cluster. A request still running is joined;
+     * a recent answer is returned as it is. The key is the API path, which names the project and,
+     * for commits, the ref. Nothing here is keyed by cluster.
+     */
+    const remember = <T>(key: string, load: () => Promise<T>): Promise<T> => {
+      const cached = remembered.get(key);
+
+      if (cached && Date.now() - cached.at < sharedResultFreshMs) return Promise.resolve(cached.value as T);
+
+      const pending = inFlight.get(key);
+
+      if (pending) return pending as Promise<T>;
+
+      const finish = () => {
+        if (inFlight.get(key) === promise) inFlight.delete(key);
+      };
+      const promise = load().then(
+        (value) => {
+          remembered.set(key, { at: Date.now(), value });
+          finish();
+
+          return value;
+        },
+        (error: unknown) => {
+          finish();
+
+          throw error;
+        },
+      );
+
+      inFlight.set(key, promise);
+
+      return promise;
+    };
+
+    const readJson = (host: string, path: string) =>
+      glab.json ? glab.json(host, path) : glab(host, path).then((body) => JSON.parse(body) as unknown);
+
+    /** REST JSON, reused across clusters and not parsed again when GitLab answers 304. */
+    const glabJson = (host: string, path: string) => remember(`${host}\n${path}`, () => readJson(host, path));
 
     const pipelineList = async (host: string, project: string, query: string) =>
       z
@@ -81,30 +196,27 @@ export const trackSourcesInjectable = getInjectable2({
         .parse(await glabJson(host, apiOf(project, `/pipelines?${query}`)))
         .map((pipeline): GitlabPipeline => pipeline);
 
-    const latestInFlight = new Map<string, Promise<WorkflowRun[]>>();
-    const latestRunsOf = (host: string, project: string) => {
-      const key = `${host}/${project}`;
-      const kept = latestInFlight.get(key);
-
-      if (kept) return kept;
-
-      const latest = pipelineList(host, project, `per_page=${latestPipelinesAsked}&order_by=id&sort=desc`)
-        .then((pipelines) => pipelines.map(toWorkflowRun))
-        .finally(() => latestInFlight.delete(key));
-
-      latestInFlight.set(key, latest);
-
-      return latest;
-    };
-
-    const runsOfCommit = async (host: string, project: string, sha: string, latest: readonly WorkflowRun[]) =>
-      runsOfCommitWith(
-        sha,
-        (await pipelineList(host, project, `sha=${encodeURIComponent(sha)}&per_page=${pipelinesAskedPerCommit}`)).map(
-          toWorkflowRun,
-        ),
-        latest,
+    // The latest pipelines are the project's, so every ref and every cluster share this one answer.
+    const latestRunsOf = (host: string, project: string) =>
+      remember(`${host}/${project}/pipelines`, async () =>
+        pipelinesFromGraphql(await readJson(host, latestPipelinesPath(project)), host, project)
+          .map(toPipeline)
+          .sort((a, b) => b.databaseId - a.databaseId),
       );
+
+    /**
+     * A commit already among the latest pipelines is matched there. A per-sha request is only for a
+     * commit those pipelines do not contain, such as one older than the newest hundred.
+     */
+    const runsOfCommit = async (host: string, project: string, sha: string, latest: readonly Pipeline[]) => {
+      if (latest.some((run) => run.headSha === sha)) return runsOfCommitWith(sha, [], latest);
+
+      const asked = (
+        await pipelineList(host, project, `sha=${encodeURIComponent(sha)}&per_page=${pipelinesAskedPerCommit}`)
+      ).map(toPipeline);
+
+      return runsOfCommitWith(sha, asked, latest);
+    };
 
     const commitOf = async (host: string, project: string, ref: string) =>
       z
@@ -117,8 +229,8 @@ export const trackSourcesInjectable = getInjectable2({
         .parse(await glabJson(host, apiOf(project, `/repository/commits/${encodeURIComponent(tag)}`)));
 
     /**
-     * Pipelines are asked per commit. A pipeline's ref is the tag for a release, and a merge request
-     * pipeline may run on the same commit under another ref, so only the pipelines of what is followed count.
+     * A pipeline's ref is the tag for a release, and a merge request pipeline may run on the same commit
+     * under another ref, so only the pipelines of what is followed count.
      */
     const runsOf = async (
       host: string,
@@ -126,7 +238,7 @@ export const trackSourcesInjectable = getInjectable2({
       ref: string,
       sha: string,
       version: Version,
-      latest: readonly WorkflowRun[],
+      latest: readonly Pipeline[],
     ) =>
       toVersionRuns(
         version,
@@ -250,7 +362,7 @@ export const trackSourcesInjectable = getInjectable2({
       // tags it afterwards has none, and then the commit's pipelines there are shown.
       const releaseRunsOf = async (
         version: Version & { sha?: string; commitTitle?: string },
-        latest: readonly WorkflowRun[],
+        latest: readonly Pipeline[],
       ) => {
         const commit = await taggedCommitOfRelease(
           version.id,

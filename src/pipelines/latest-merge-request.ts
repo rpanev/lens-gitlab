@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { browserUrlOf } from "./browser-url";
 import { overallStatusOf, type RunStatus, runStatusOf } from "./run-status";
-import { runStateOf, type WorkflowRun } from "./workflow-run";
+import { runStateOf, type Pipeline } from "./pipeline";
 
 const mergeRequestSchema = z.object({
   iid: z.number(),
@@ -36,7 +36,7 @@ export interface LatestMergeRequest {
 export interface BranchCommit {
   readonly id: string;
   readonly title: string;
-  readonly runs: readonly WorkflowRun[];
+  readonly runs: readonly Pipeline[];
 }
 
 export interface MergeStanding {

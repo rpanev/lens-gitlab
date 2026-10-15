@@ -20,7 +20,7 @@ const textOf = (change: Change, repository: string, followed: string, clusterNam
     case "live":
       return `${listed(change.services)} ${change.services.length === 1 ? "runs" : "run"} ${change.label} on ${clusterName}`;
     case "ci-failed":
-      return `CI failed on ${repository} ${followed} ${change.label}: ${listed(change.workflows)}`;
+      return `CI failed on ${repository} ${followed} ${change.label}: ${listed(change.pipelines)}`;
     case "failing":
       return `Failing to apply ${change.name} on ${clusterName}: ${change.message}`;
     case "unreadable":

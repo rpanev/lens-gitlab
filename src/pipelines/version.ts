@@ -1,5 +1,5 @@
 import { overallStatusOf } from "./run-status";
-import { isStartedByVersion, type WorkflowRun } from "./workflow-run";
+import { isStartedByVersion, type Pipeline } from "./pipeline";
 
 /** One version of what a watch follows: a commit of a branch, or a release. Newest first wherever listed. */
 export interface Version {
@@ -12,18 +12,18 @@ export interface Version {
   /** When it was committed or published. */
   readonly at: string;
   readonly prerelease?: boolean;
-  /** Who made the commit: their GitHub login, or the name they committed with. */
+  /** Who made the commit: the name they committed with. */
   readonly author?: string;
-  /** Its page on GitHub. */
+  /** Its page on GitLab. */
   readonly url: string;
 }
 
 export interface VersionRuns {
   readonly version: Version;
-  /** The newest run of each workflow the version started, by workflow name: what its CI status is of. */
-  readonly runs: readonly WorkflowRun[];
-  /** Runs recorded against it that it did not start, such as Dependabot's: shown apart, counted for nothing. */
-  readonly otherRuns: readonly WorkflowRun[];
+  /** The newest run of each pipeline the version started, by name: what its CI status is of. */
+  readonly runs: readonly Pipeline[];
+  /** Runs recorded against it that it did not start, such as a merge request's: shown apart, counted for nothing. */
+  readonly otherRuns: readonly Pipeline[];
   /**
    * The branch the runs ran on, when they are not the version's own: a release with no runs of its own
    * shows those of the commit it was tagged on, as a repository that builds on its default branch has.
@@ -31,24 +31,24 @@ export interface VersionRuns {
   readonly runsOn?: string;
 }
 
-const newestOfEachWorkflow = (newestFirst: readonly WorkflowRun[]) =>
+const newestOfEachPipeline = (newestFirst: readonly Pipeline[]) =>
   newestFirst
-    // A workflow run again on the same commit replaces what it said before.
-    .filter((run, index) => newestFirst.findIndex((each) => each.workflowName === run.workflowName) === index)
-    .sort((a, b) => a.workflowName.localeCompare(b.workflowName));
+    // A pipeline run again on the same commit replaces what it said before.
+    .filter((run, index) => newestFirst.findIndex((each) => each.name === run.name) === index)
+    .sort((a, b) => a.name.localeCompare(b.name));
 
-/** A version with the runs GitHub lists for it, newest first. */
-export const toVersionRuns = (version: Version, newestFirst: readonly WorkflowRun[], runsOn?: string): VersionRuns => ({
+/** A version with the pipelines GitLab lists for it, newest first. */
+export const toVersionRuns = (version: Version, newestFirst: readonly Pipeline[], runsOn?: string): VersionRuns => ({
   version,
   runsOn,
-  runs: newestOfEachWorkflow(newestFirst.filter(isStartedByVersion)),
-  otherRuns: newestOfEachWorkflow(newestFirst.filter((run) => !isStartedByVersion(run))),
+  runs: newestOfEachPipeline(newestFirst.filter(isStartedByVersion)),
+  otherRuns: newestOfEachPipeline(newestFirst.filter((run) => !isStartedByVersion(run))),
 });
 
-/** What names a version's workflows: "76cd335", or "v1.2.0 · on main" for runs of the commit it was tagged on. */
-export const workflowsTitleOf = (row: VersionRuns) => `${row.version.label}${row.runsOn ? ` · on ${row.runsOn}` : ""}`;
+/** What names a version's pipelines: "76cd335", or "v1.2.0 · on main" for runs of the commit it was tagged on. */
+export const pipelinesTitleOf = (row: VersionRuns) => `${row.version.label}${row.runsOn ? ` · on ${row.runsOn}` : ""}`;
 
-/** What heads a version's workflows: how many of them passed, and the status that asks most for attention. */
+/** What heads a version's pipelines: how many of them passed, and the status that asks most for attention. */
 export const summaryOf = (row: Pick<VersionRuns, "runs">) => {
   const total = row.runs.length;
 
@@ -62,8 +62,8 @@ export const summaryOf = (row: Pick<VersionRuns, "runs">) => {
   };
 };
 
-/** How many versions passed all their workflows, of those that ran any: one without runs says nothing of CI. */
-export const workflowsPassingOf = (rows: readonly Pick<VersionRuns, "runs">[]) => {
+/** How many versions passed all their pipelines, of those that ran any: one without runs says nothing of CI. */
+export const pipelinesPassingOf = (rows: readonly Pick<VersionRuns, "runs">[]) => {
   const ran = rows.filter((row) => row.runs.length > 0);
 
   return {

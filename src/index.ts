@@ -1,3 +1,4 @@
+// @k8slens/*, react and mobx stay on the versions this Lens build bundles. A newer range is refused when the extension loads. Shell, eval and network alerts on those packages come from the host libraries, which the UI is built on.
 import { getFeature, registerInjectablesFromModules } from "@k8slens/feature-core";
 import modulesWithInjectables from "./**/*.injectable.(ts|tsx)";
 import stylesheets from "./**/!(_*).(scss|css)";

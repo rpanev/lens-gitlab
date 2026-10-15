@@ -12,7 +12,7 @@ export const liveCheckSeconds = 15;
 const idleHeadCheckSeconds = 60;
 /** A version this young with no runs yet is expected to start some. */
 const awaitingRunsMinutes = 10;
-/** How often a version GitHub said has no runs is asked again, between full checks: the answer may have been wrong. */
+/** How often a version GitLab said has no runs is asked again, between full checks: the answer may have been wrong. */
 const noRunsRecheckMinutes = 5;
 
 export type TrackActivityState =
@@ -50,7 +50,7 @@ export const trackActivityInjectable = getInjectable2({
   instantiate: (di) => {
     const sourceOf = di.inject(trackSourcesInjectable)();
 
-    return (watchKey: string) => {
+    const open = (watchKey: string) => {
       const watch = watchOfKey(watchKey);
       const { intervalMinutes } = watch;
       const source = sourceOf(watch);
@@ -141,7 +141,7 @@ export const trackActivityInjectable = getInjectable2({
         return loaded()?.mode === "live" ? liveCheckSeconds : idleHeadCheckSeconds;
       };
 
-      // A problem waiting for the user, such as gh signed out, would only fail again: checks stop until the
+      // A problem waiting for the user, such as glab signed out, would only fail again: checks stop until the
       // user checks again, or something new follows the watch, such as its dashboard being opened.
       const schedule = () => {
         clearTimeout(timer);
@@ -188,6 +188,21 @@ export const trackActivityInjectable = getInjectable2({
           };
         },
       };
+    };
+
+    const byWatch = new Map<string, ReturnType<typeof open>>();
+
+    // One poller per watch, so dev, stage and prod following the same project share its GitLab reads.
+    return (watchKey: string) => {
+      const kept = byWatch.get(watchKey);
+
+      if (kept) return kept;
+
+      const created = open(watchKey);
+
+      byWatch.set(watchKey, created);
+
+      return created;
     };
   },
 });

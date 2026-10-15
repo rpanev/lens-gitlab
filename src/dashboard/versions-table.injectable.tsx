@@ -9,7 +9,7 @@ import {
 import { useInject } from "@k8slens/use-inject";
 import { entriesOfVersion, type VersionEntry } from "../deployments/version-entries";
 import { isReleasesWatch, watchOfKey } from "../watched-repositories/watched-repository";
-import { overallStatusOf } from "../workflow-runs/run-status";
+import { overallStatusOf } from "../pipelines/run-status";
 import { CommitRunsTooltip } from "./commit-runs-tooltip";
 import { formatAge } from "./format-time-ago";
 import { RunStatusIcon } from "./run-status-icon";
@@ -103,7 +103,7 @@ const ChecksCell = ({ row }: CellProps) => {
 
   return (
     <SelectLink row={row} tooltip={runsTooltip(row)}>
-      {/* Only what the version started counts; GitHub's own runs recorded against it do not. */}
+      {/* Only what the version started counts; a pipeline recorded against it for something else does not. */}
       {row.runs.length > 0
         ? `${row.runs.filter((run) => run.conclusion === "success").length}/${row.runs.length} passed`
         : `${others} other ${others === 1 ? "run" : "runs"}`}
@@ -154,7 +154,7 @@ const AgeCell = ({ row }: CellProps) => <Span>{formatAge(row.version.at)}</Span>
 const columns = [
   ["version", VersionCell, columnHeader("Version")],
   ["title", TitleCell, columnHeader("Message")],
-  ["checks", ChecksCell, columnHeader("Workflows")],
+  ["checks", ChecksCell, columnHeader("Pipelines")],
   ["in-cluster", InClusterCell, columnHeader("In cluster")],
   ["age", AgeCell, columnHeader("Age")],
 ] as const;

@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { formatAge } from "../src/dashboard/format-time-ago";
-import { overallStatusOf, runStatusOf } from "../src/workflow-runs/run-status";
-import { shellQuote } from "../src/workflow-runs/shell-quote";
-import { trackSourcesInjectable } from "../src/workflow-runs/track-sources.injectable";
-import { toVersionRuns } from "../src/workflow-runs/version";
-import { runsOfCommitWith } from "../src/workflow-runs/workflow-run";
+import { overallStatusOf, runStatusOf } from "../src/pipelines/run-status";
+import { shellQuote } from "../src/pipelines/shell-quote";
+import { trackSourcesInjectable } from "../src/pipelines/track-sources.injectable";
+import { toVersionRuns } from "../src/pipelines/version";
+import { runsOfCommitWith } from "../src/pipelines/pipeline";
 import { commit, run } from "./fixtures";
 
 describe("runStatusOf", () => {
@@ -18,6 +18,7 @@ describe("runStatusOf", () => {
     ["completed", "action_required", "Action required"],
     ["completed", "cancelled", "Cancelled"],
     ["completed", "skipped", "Skipped"],
+    ["manual", "", "Manual"],
   ])("%s / %s → %s", (status, conclusion, label) => {
     expect(runStatusOf(run("build", status, conclusion)).label).toBe(label);
   });
@@ -36,7 +37,7 @@ describe("overallStatusOf", () => {
 });
 
 describe("toVersionRuns", () => {
-  it("keeps the newest run of each workflow, by name", () => {
+  it("keeps the newest run of each pipeline, by name", () => {
     const newest = [
       run("tests", "completed", "success", 3),
       run("build", "completed", "success", 2),
@@ -45,7 +46,7 @@ describe("toVersionRuns", () => {
 
     const { runs } = toVersionRuns(commit("abc"), newest);
 
-    expect(runs.map((each) => [each.workflowName, each.databaseId])).toEqual([
+    expect(runs.map((each) => [each.name, each.databaseId])).toEqual([
       ["build", 2],
       ["tests", 3],
     ]);
@@ -58,12 +59,12 @@ describe("toVersionRuns, what a version started", () => {
       { ...run("build"), event: "push" },
       { ...run("Merge request", "completed", "failure", 2), event: "merge_request_event" },
       { ...run("nightly", "completed", "success", 3), event: "schedule" },
-      { ...run("deploy", "completed", "success", 4), event: "workflow_dispatch" },
+      { ...run("deploy", "completed", "success", 4), event: "web" },
     ]);
 
     // A scheduled run builds the commit the branch is at, so it counts.
-    expect(runs.map((each) => each.workflowName)).toEqual(["build", "deploy", "nightly"]);
-    expect(otherRuns.map((each) => each.workflowName)).toEqual(["Merge request"]);
+    expect(runs.map((each) => each.name)).toEqual(["build", "deploy", "nightly"]);
+    expect(otherRuns.map((each) => each.name)).toEqual(["Merge request"]);
     expect(overallStatusOf(runs).label).toBe("Success");
   });
 });
@@ -116,14 +117,45 @@ describe("releases and their pipelines", () => {
 
   const sourceRunning = (pipelines: object[], defaultBranch = async () => "main", latest: object[] = pipelines) => {
     let latestAsked = 0;
+    let shaAsked = 0;
     const glab = async (_host: string, path: string) => {
-      if (path.includes("/pipelines?") && !path.includes("sha=")) {
+      if (path.startsWith("graphql?")) {
         latestAsked++;
 
-        return JSON.stringify(latest);
+        return JSON.stringify({
+          data: {
+            project: {
+              pipelines: {
+                nodes: latest.map((pipeline) => {
+                  const each = pipeline as {
+                    id: number;
+                    sha: string;
+                    ref: string;
+                    status: string;
+                    source: string;
+                    name?: string;
+                  };
+
+                  return {
+                    id: `gid://gitlab/Ci::Pipeline/${each.id}`,
+                    sha: each.sha,
+                    ref: each.ref,
+                    status: each.status.toUpperCase(),
+                    source: each.source,
+                    name: each.name,
+                  };
+                }),
+              },
+            },
+          },
+        });
+      }
+      if (path.includes("/pipelines?") && path.includes("sha=")) {
+        shaAsked++;
+
+        return JSON.stringify(pipelines);
       }
       if (path.includes("/releases?")) return releases;
-      if (path.includes("/pipelines?")) return JSON.stringify(pipelines);
       if (path.includes("/repository/commits/")) return JSON.stringify({ id: sha, title: "chore(main): release 1.2.0" });
       if (!path.replace(/^projects\/[^/]+/, "").includes("/")) return defaultBranch().then((name) => JSON.stringify({ default_branch: name }));
       throw new Error(`unexpected ${path}`);
@@ -136,30 +168,61 @@ describe("releases and their pipelines", () => {
       intervalMinutes: 5,
     });
 
-    return Object.assign(source, { latestAsked: () => latestAsked });
+    return Object.assign(source, { latestAsked: () => latestAsked, shaAsked: () => shaAsked });
   };
 
   it("shows runs that asking by commit misses yet, from the repository's latest runs", async () => {
     const source = sourceRunning([], undefined, [pipeline("release", "v1.2.0")]);
     const { recent } = await source.all();
 
-    expect(recent[0].runs.map((each: { workflowName: string }) => each.workflowName)).toEqual(["release"]);
+    expect(recent[0].runs.map((each: { name: string }) => each.name)).toEqual(["release"]);
   });
 
-  it("asks once for the latest runs when versions are rechecked together", async () => {
+  it("matches a commit from the latest pipelines without asking for it again", async () => {
     const source = sourceRunning([pipeline("release", "v1.2.0")]);
-    const { versions } = await source.all();
-    const before = source.latestAsked();
 
-    await Promise.all([source.runsOf(versions[0]), source.runsOf(versions[0])]);
+    await source.all();
 
-    expect(source.latestAsked() - before).toBe(1);
+    expect(source.shaAsked()).toBe(0);
+  });
+
+  it("asks for a commit's pipelines only when that commit is not among the latest", async () => {
+    const source = sourceRunning([pipeline("release", "v1.2.0")], undefined, []);
+
+    await source.all();
+
+    expect(source.shaAsked()).toBe(1);
+    expect(source.latestAsked()).toBe(1);
+  });
+
+  it("reuses the latest pipelines for another check of the same project", async () => {
+    const source = sourceRunning([pipeline("release", "v1.2.0")]);
+
+    await source.all();
+    await Promise.all([source.runsOf((await source.all()).versions[0]), source.all()]);
+
+    expect(source.latestAsked()).toBe(1);
+  });
+
+  it("asks once for the latest pipelines when versions are rechecked together", async () => {
+    const source = sourceRunning([pipeline("release", "v1.2.0")]);
+    const version = {
+      id: "v1.2.0",
+      label: "v1.2.0",
+      title: "v1.2.0",
+      at: "2026-10-01T08:00:00Z",
+      url: "https://gitlab.com/o/app/-/releases/v1.2.0",
+    };
+
+    await Promise.all([source.runsOf(version), source.runsOf(version)]);
+
+    expect(source.latestAsked()).toBe(1);
   });
 
   it("shows a release's own runs when its tag started some", async () => {
     const { recent } = await sourceRunning([pipeline("release", "v1.2.0"), pipeline("ci", "main")]).all();
 
-    expect(recent[0].runs.map((each: { workflowName: string }) => each.workflowName)).toEqual(["release"]);
+    expect(recent[0].runs.map((each: { name: string }) => each.name)).toEqual(["release"]);
     expect(recent[0].runsOn).toBeUndefined();
   });
 
@@ -170,7 +233,7 @@ describe("releases and their pipelines", () => {
       pipeline("tests", "feature-x"),
     ]).all();
 
-    expect(recent[0].runs.map((each: { workflowName: string }) => each.workflowName)).toEqual(["ci", "CodeQL"]);
+    expect(recent[0].runs.map((each: { name: string }) => each.name)).toEqual(["ci", "CodeQL"]);
     expect(recent[0].runsOn).toBe("main");
   });
 
@@ -186,7 +249,7 @@ describe("releases and their pipelines", () => {
 
     const { recent } = await source.all();
 
-    expect(recent[0].runs.map((each: { workflowName: string }) => each.workflowName)).toEqual(["ci"]);
+    expect(recent[0].runs.map((each: { name: string }) => each.name)).toEqual(["ci"]);
     expect(recent[0].runsOn).toBe("main");
   });
 

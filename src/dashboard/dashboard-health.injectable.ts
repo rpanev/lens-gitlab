@@ -1,7 +1,7 @@
 import { getInjectable2 } from "@k8slens/injectable";
 import { computed } from "mobx";
 import { watchedRepositoriesStoreInjectable } from "../watched-repositories/watched-repositories-store.injectable";
-import { overallStatusOf } from "../workflow-runs/run-status";
+import { overallStatusOf } from "../pipelines/run-status";
 import { followedLabelOf, watchKeyOf } from "../watched-repositories/watched-repository";
 import { serviceLookOf } from "./flux-stage";
 import { watchOnClusterInjectable } from "./watch-on-cluster.injectable";

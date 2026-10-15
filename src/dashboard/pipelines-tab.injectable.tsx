@@ -16,13 +16,13 @@ import { computed, type ObservableMap, observable, runInAction } from "mobx";
 import { observer } from "mobx-react";
 import { useEffect } from "react";
 import { hostOf, watchOfKey } from "../watched-repositories/watched-repository";
-import { workflowsTitleOf } from "../workflow-runs/version";
-import { GlabProblemNotice } from "./gh-problem-notice";
+import { pipelinesTitleOf } from "../pipelines/version";
+import { GlabProblemNotice } from "./glab-problem-notice";
 import { watchOnClusterInjectable } from "./watch-on-cluster.injectable";
-import { WorkflowRunCards } from "./workflow-run-cards";
+import { PipelineCards } from "./pipeline-cards";
 
-/** Which version's workflows a tab shows: the watch on the cluster it belongs to, and the version. */
-export interface WorkflowsTabInput {
+/** Which version's pipelines a tab shows: the watch on the cluster it belongs to, and the version. */
+export interface PipelinesTabInput {
   readonly clusterId: string;
   readonly watchKey: string;
   readonly versionId: string;
@@ -30,20 +30,20 @@ export interface WorkflowsTabInput {
   readonly label: string;
 }
 
-export const workflowsTabKind = getTabKind<WorkflowsTabInput>()("lens-gitlab-workflows");
+export const pipelinesTabKind = getTabKind<PipelinesTabInput>()("lens-gitlab-pipelines");
 
 // Lens keeps the tab across restarts; what it shows is the extension's to keep.
-export const workflowsTabInputsBunch = getPersistableMapInjectableBunch<TabId, WorkflowsTabInput>()({
-  id: "workflows-tab-inputs",
+export const pipelinesTabInputsBunch = getPersistableMapInjectableBunch<TabId, PipelinesTabInput>()({
+  id: "pipelines-tab-inputs",
 });
 
-export const workflowsTabInputInjectable = getInjectable2({
-  id: "lens-gitlab-workflows-tab-input",
+export const pipelinesTabInputInjectable = getInjectable2({
+  id: "lens-gitlab-pipelines-tab-input",
 
   instantiate: (di) => {
-    const getInputs = di.inject(workflowsTabInputsBunch.persistable);
+    const getInputs = di.inject(pipelinesTabInputsBunch.persistable);
     // Undefined until what was persisted has loaded.
-    const inputs = observable.box<ObservableMap<TabId, WorkflowsTabInput> | undefined>(undefined, { deep: false });
+    const inputs = observable.box<ObservableMap<TabId, PipelinesTabInput> | undefined>(undefined, { deep: false });
 
     void getInputs().then((loaded) => runInAction(() => inputs.set(loaded)));
 
@@ -51,21 +51,21 @@ export const workflowsTabInputInjectable = getInjectable2({
   },
 });
 
-const tabIdOf = ({ clusterId, watchKey, versionId }: WorkflowsTabInput) =>
+const tabIdOf = ({ clusterId, watchKey, versionId }: PipelinesTabInput) =>
   JSON.stringify([clusterId, watchKey, versionId]);
 
-export const openWorkflowsTabInjectable = getInjectable2({
-  id: "lens-gitlab-open-workflows-tab",
+export const openPipelinesTabInjectable = getInjectable2({
+  id: "lens-gitlab-open-pipelines-tab",
   consumptions: [openTabInjectionToken, focusTabInjectionToken, tabIsOpenInjectionToken],
 
   instantiate: (di) => {
-    const openTab = di.inject(openTabInjectionToken.for(mainViewTabHostKind).for(workflowsTabKind).for(di.scopeIds))();
+    const openTab = di.inject(openTabInjectionToken.for(mainViewTabHostKind).for(pipelinesTabKind).for(di.scopeIds))();
     const focusTab = di.inject(
-      focusTabInjectionToken.for(mainViewTabHostKind).for(workflowsTabKind).for(di.scopeIds),
+      focusTabInjectionToken.for(mainViewTabHostKind).for(pipelinesTabKind).for(di.scopeIds),
     )();
-    const isOpen = di.inject(tabIsOpenInjectionToken.for(mainViewTabHostKind).for(workflowsTabKind).for(di.scopeIds))();
+    const isOpen = di.inject(tabIsOpenInjectionToken.for(mainViewTabHostKind).for(pipelinesTabKind).for(di.scopeIds))();
 
-    return () => async (input: WorkflowsTabInput) => {
+    return () => async (input: PipelinesTabInput) => {
       const tabId = tabIdOf(input);
 
       await ((await isOpen({ tabId })) ? focusTab({ tabId }) : openTab({ tabId, input }));
@@ -73,13 +73,13 @@ export const openWorkflowsTabInjectable = getInjectable2({
   },
 });
 
-const WorkflowsTitle = observer(({ tabId }: TabProps<typeof mainViewTabHostKind>) => {
-  const input = useSyncInject(workflowsTabInputInjectable, tabId).get();
+const PipelinesTitle = observer(({ tabId }: TabProps<typeof mainViewTabHostKind>) => {
+  const input = useSyncInject(pipelinesTabInputInjectable, tabId).get();
 
   return <Div>Pipelines{input ? ` · ${input.label}` : ""}</Div>;
 });
 
-const WorkflowsOfVersion = observer(({ input }: { input: WorkflowsTabInput }) => {
+const PipelinesOfVersion = observer(({ input }: { input: PipelinesTabInput }) => {
   const watchState = useInject(watchOnClusterInjectable)(input.clusterId, input.watchKey);
   const row = watchState.rows.find((each) => each.version.id === input.versionId);
   const watch = watchOfKey(input.watchKey);
@@ -91,10 +91,10 @@ const WorkflowsOfVersion = observer(({ input }: { input: WorkflowsTabInput }) =>
   return (
     <Div $flex={{ direction: "vertical", gap: "l" }} $padding="xxl" $height="full" $overflow={{ y: "auto" }}>
       <Span $font={{ size: "xl" }}>
-        {repository} · {row ? workflowsTitleOf(row) : input.label}
+        {repository} · {row ? pipelinesTitleOf(row) : input.label}
       </Span>
       {row ? (
-        <WorkflowRunCards
+        <PipelineCards
           host={hostOf(watch)}
           project={repository}
           row={row}
@@ -112,21 +112,21 @@ const WorkflowsOfVersion = observer(({ input }: { input: WorkflowsTabInput }) =>
   );
 });
 
-const Workflows = observer(({ tabId }: TabProps<typeof mainViewTabHostKind>) => {
-  const input = useSyncInject(workflowsTabInputInjectable, tabId).get();
+const Pipelines = observer(({ tabId }: TabProps<typeof mainViewTabHostKind>) => {
+  const input = useSyncInject(pipelinesTabInputInjectable, tabId).get();
 
-  return input ? <WorkflowsOfVersion input={input} /> : null;
+  return input ? <PipelinesOfVersion input={input} /> : null;
 });
 
-export const workflowsTabBunch = getTabKindInjectableBunch({
+export const pipelinesTabBunch = getTabKindInjectableBunch({
   tabHostKind: mainViewTabHostKind,
-  kind: workflowsTabKind,
-  Component: Workflows,
-  Title: WorkflowsTitle,
+  kind: pipelinesTabKind,
+  Component: Pipelines,
+  Title: PipelinesTitle,
 
   onTabCreate: {
     instantiate: (di) => {
-      const getInputs = di.inject(workflowsTabInputsBunch.persistable);
+      const getInputs = di.inject(pipelinesTabInputsBunch.persistable);
 
       return () =>
         async ({ tabId, input }) => {

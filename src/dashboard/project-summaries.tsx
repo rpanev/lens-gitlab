@@ -2,8 +2,8 @@ import { A, Div, Span } from "@k8slens/element-components";
 import { useInject } from "@k8slens/use-inject";
 import { observer } from "mobx-react";
 import { hostOf, isReleasesWatch, type WatchedRepository, watchKeyOf } from "../watched-repositories/watched-repository";
-import { mergeStandingOf, projectUrlOf } from "../workflow-runs/latest-merge-request";
-import { openVersionInjectable } from "../workflow-runs/open-version.injectable";
+import { mergeStandingOf, projectUrlOf } from "../pipelines/latest-merge-request";
+import { openVersionInjectable } from "../pipelines/open-version.injectable";
 import { watchOnClusterInjectable } from "./watch-on-cluster.injectable";
 import { Panel } from "./panel";
 

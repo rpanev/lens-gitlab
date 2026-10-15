@@ -9,7 +9,7 @@ export const watchedRepositoriesStoreInjectable = getInjectable2({
   instantiate: (di) => {
     const getPersistedRepositories = di.inject(watchedRepositoriesBunch.persistable);
 
-    return (clusterId: string) => {
+    const open = (clusterId: string) => {
       const getWatchedRepositories = () => getPersistedRepositories(clusterId);
       const loaded = observable.box<IObservableArray<WatchedRepository> | undefined>(undefined, { deep: false });
 
@@ -45,6 +45,20 @@ export const watchedRepositoriesStoreInjectable = getInjectable2({
       };
 
       return store;
+    };
+
+    const byCluster = new Map<string, ReturnType<typeof open>>();
+
+    return (clusterId: string) => {
+      const kept = byCluster.get(clusterId);
+
+      if (kept) return kept;
+
+      const created = open(clusterId);
+
+      byCluster.set(clusterId, created);
+
+      return created;
     };
   },
 });

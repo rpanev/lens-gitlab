@@ -1,5 +1,5 @@
 import { CheckCircleIcon, ErrorIcon, RemoveCircleOutlineIcon, ScheduleIcon, WarningIcon } from "@k8slens/icon";
-import { inProgress, type RunStatus } from "../workflow-runs/run-status";
+import { inProgress, type RunStatus } from "../pipelines/run-status";
 import { RunningIcon } from "./running-icon";
 
 export const RunStatusIcon = ({ status }: { status: RunStatus }) => {
@@ -11,7 +11,7 @@ export const RunStatusIcon = ({ status }: { status: RunStatus }) => {
     case "warning":
       return <WarningIcon $size="s" $color="warning" />;
     case "primary":
-      // Queued waits; in progress turns, as GitHub shows it.
+      // Queued waits; in progress turns.
       return status === inProgress ? <RunningIcon /> : <ScheduleIcon $size="s" $color="primary" />;
     case "grey60":
       return <RemoveCircleOutlineIcon $size="s" $color="textMuted" />;

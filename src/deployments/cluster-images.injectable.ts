@@ -7,6 +7,7 @@ import {
   deploymentKind,
   kubeResourcesInjectionToken,
   podKind,
+  replicaSetKind,
   statefulSetKind,
 } from "@k8slens/kubernetes-contracts";
 import type { Subscribable } from "@k8slens/subscribable";
@@ -21,7 +22,10 @@ import {
   withFailingDependencies,
   type ImageAutomation,
   type ImageSelection,
+  imageRevisionsOf,
+  type ReplicaRollout,
   type Workload,
+  withReplicaSets,
 } from "./cluster-images";
 import { applicationKind, applicationResourceOf, argoOwnerOf, argoprojV1alpha1 } from "./argo-kinds";
 import {
@@ -60,7 +64,7 @@ export type ClusterImagesState =
 type Source<T> = IComputedValue<readonly T[]>;
 
 interface Template {
-  metadata?: { labels?: Record<string, string> };
+  metadata?: { labels?: Record<string, string>; annotations?: Record<string, string> };
   spec?: { containers?: { image?: string }[]; initContainers?: { image?: string }[] };
 }
 
@@ -85,7 +89,7 @@ export const clusterImagesInjectable = getInjectable2({
     const connectCluster = di.inject(connectClusterInjectionToken);
     const kubeResources = di.inject(kubeResourcesInjectionToken)();
 
-    return (clusterId: string) => {
+    const open = (clusterId: string) => {
       const sources = observable.box<
         | {
             workloads: Source<Workload>[];
@@ -95,6 +99,7 @@ export const clusterImagesInjectable = getInjectable2({
             imageAutomations: Source<ImageAutomation>;
             helmCharts: Source<HelmChart>;
             gitSources: Source<GitSource>;
+            replicaSets: Source<ReplicaRollout>;
           }
         | undefined
       >(undefined, { deep: false });
@@ -150,7 +155,7 @@ export const clusterImagesInjectable = getInjectable2({
           };
           spec: { template?: Template };
         }): Workload[] => {
-          const { rolledOut, ready, desired, settledAt } = statusOf(resource);
+          const { rolledOut, ready, desired, settledAt, stalled } = statusOf(resource);
 
           return [
             {
@@ -161,7 +166,9 @@ export const clusterImagesInjectable = getInjectable2({
               rolledOut,
               replicas: { ready, desired },
               settledAt,
+              stalled,
               owner: ownerOfWorkload(resource.metadata, resource.spec.template?.metadata?.labels),
+              revisions: imageRevisionsOf(resource.metadata, resource.spec.template?.metadata),
             },
           ];
         };
@@ -179,10 +186,12 @@ export const clusterImagesInjectable = getInjectable2({
             lastAppliedRevision?: string;
             lastAttemptedRevision?: string;
             helmChart?: string;
-            history?: readonly { chartVersion?: string; status?: string }[];
+            history?: readonly { chartVersion?: string; status?: string; lastDeployed?: string }[];
           };
         }): DeployResource[] => {
           const status = resource.status ?? {};
+          const ready = status.conditions?.find((condition) => condition.type === "Ready" && condition.status === "True");
+          const released = status.history?.find((release) => release.status === "deployed");
 
           return [
             {
@@ -219,6 +228,7 @@ export const clusterImagesInjectable = getInjectable2({
                       attempted: status.lastAttemptedRevision,
                     }
                   : undefined,
+              appliedAt: released?.lastDeployed ?? ready?.lastTransitionTime,
             },
           ];
         };
@@ -263,6 +273,29 @@ export const clusterImagesInjectable = getInjectable2({
         return image ? [{ namespace: policy.metadata.namespace, name: policy.metadata.name, image }] : [];
       };
 
+      const replicaSetOf = (set: {
+        metadata: {
+          namespace: string;
+          creationTimestamp?: string;
+          ownerReferences?: readonly { kind: string; name: string }[];
+        };
+        spec?: { template?: Template };
+      }): ReplicaRollout[] => {
+        const owner = set.metadata.ownerReferences?.find((each) => each.kind === "Deployment");
+        const createdAt = set.metadata.creationTimestamp;
+
+        if (!owner || !createdAt) return [];
+
+        return [
+          {
+            namespace: set.metadata.namespace,
+            ownerName: owner.name,
+            images: imagesOf(set.spec?.template),
+            createdAt,
+          },
+        ];
+      };
+
       const imageAutomationOf = (automation: {
         metadata: { namespace: string; name: string };
         status?: { lastPushTime?: string; lastPushCommit?: string };
@@ -296,6 +329,7 @@ export const clusterImagesInjectable = getInjectable2({
             helmCharts,
             gitSources,
             applications,
+            replicaSets,
           ] = await Promise.all([
             follow(kubeResources(deploymentKind, appsV1, clusterId), workloadOf("Deployment", deploymentStatusOf)),
             follow(kubeResources(statefulSetKind, appsV1, clusterId), workloadOf("StatefulSet", statefulSetStatusOf)),
@@ -342,6 +376,7 @@ export const clusterImagesInjectable = getInjectable2({
                 applicationResourceOf(application),
               ]),
             ),
+            follow(kubeResources(replicaSetKind, appsV1, clusterId), replicaSetOf),
           ]);
 
           if (startedFor !== generation) return;
@@ -358,6 +393,7 @@ export const clusterImagesInjectable = getInjectable2({
               imageAutomations,
               helmCharts,
               gitSources,
+              replicaSets,
             });
           });
         } catch (error) {
@@ -385,10 +421,14 @@ export const clusterImagesInjectable = getInjectable2({
         return {
           status: "loaded",
           images: {
-            workloads: withSettledAtOfPods(
-              loaded.workloads.flatMap((source) => source.get()),
-              loaded.pods.get(),
+            workloads: withReplicaSets(
+              withSettledAtOfPods(
+                loaded.workloads.flatMap((source) => source.get()),
+                loaded.pods.get(),
+              ),
+              loaded.replicaSets.get(),
             ),
+            replicaSets: loaded.replicaSets.get(),
             imageSelections: loaded.imageSelections.get(),
             deployResources: withFailingDependencies(loaded.deployResources.flatMap((source) => source.get())),
             imageAutomations: loaded.imageAutomations.get(),
@@ -419,6 +459,20 @@ export const clusterImagesInjectable = getInjectable2({
           };
         },
       };
+    };
+
+    const byCluster = new Map<string, ReturnType<typeof open>>();
+
+    return (clusterId: string) => {
+      const kept = byCluster.get(clusterId);
+
+      if (kept) return kept;
+
+      const created = open(clusterId);
+
+      byCluster.set(clusterId, created);
+
+      return created;
     };
   },
 });

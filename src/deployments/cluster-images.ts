@@ -22,7 +22,16 @@ export interface Workload {
    * or after a scale or a replica coming back since, whichever came last.
    */
   readonly settledAt?: string;
+  /** When the ReplicaSet of these images was created: the rollout Kubernetes still remembers. */
+  readonly rolloutStartedAt?: string;
+  /** The rollout hit ProgressDeadlineExceeded. */
+  readonly stalled?: boolean;
   readonly owner?: OwnerRef;
+  /**
+   * Git commits from `org.opencontainers.image.revision` on the workload or its pod template, for an image
+   * pinned by digest or tagged latest.
+   */
+  readonly revisions?: readonly string[];
 }
 
 export interface ImageSelection {
@@ -62,6 +71,8 @@ export interface DeployResource extends OwnerRef {
   readonly waitsForDependency?: boolean;
   readonly message?: string;
   readonly revision?: string;
+  /** When Flux or Argo CD applied the revision it is at now. */
+  readonly appliedAt?: string;
 }
 
 /** A Git repository Flux fetches. */
@@ -101,7 +112,39 @@ export interface ClusterImages {
   readonly imageAutomations: readonly ImageAutomation[];
   readonly helmCharts: readonly HelmChart[];
   readonly gitSources: readonly GitSource[];
+  /** ReplicaSets still kept for Deployments, newest images included: rollout times from before Lens was open. */
+  readonly replicaSets?: readonly ReplicaRollout[];
 }
+
+/** A Deployment's ReplicaSet, as far as a lead time needs it. */
+export interface ReplicaRollout {
+  readonly namespace: string;
+  readonly ownerName: string;
+  readonly images: readonly string[];
+  readonly createdAt: string;
+}
+
+const sameImages = (left: readonly string[], right: readonly string[]) =>
+  left.length === right.length && left.every((image) => right.includes(image));
+
+/** The ReplicaSet creation time of a Deployment's current images, which Kubernetes keeps after Lens was closed. */
+export const withReplicaSets = (workloads: readonly Workload[], replicaSets: readonly ReplicaRollout[] = []): Workload[] =>
+  workloads.map((workload) => {
+    if (workload.kind !== "Deployment") return workload;
+
+    const createdAt = replicaSets
+      .filter(
+        (set) =>
+          set.namespace === workload.namespace &&
+          set.ownerName === workload.name &&
+          sameImages(set.images, workload.images),
+      )
+      .map((set) => set.createdAt)
+      .sort()
+      .at(-1);
+
+    return createdAt ? { ...workload, rolloutStartedAt: createdAt } : workload;
+  });
 
 export const fluxOwnerOf = (labels: Readonly<Record<string, string>> = {}): OwnerRef | undefined => {
   const helmRelease = labels["helm.toolkit.fluxcd.io/name"];
@@ -201,6 +244,35 @@ export const imageIsOfCommit = (image: string, sha: string) =>
   tagOf(image)
     .split(/[^0-9a-f]+/i)
     .some((word) => word.length >= 7 && sha.toLowerCase().startsWith(word.toLowerCase()));
+
+/** The OCI revision, as a pod annotation or label, when a deploy pins the image by digest or uses `latest`. */
+export const imageRevisionKey = "org.opencontainers.image.revision";
+
+/** Whether the tag does not name a build, so the revision annotation is what can. */
+export const imageNeedsRevision = (image: string) => {
+  if (image.toLowerCase().includes("@sha256:")) return true;
+
+  const tag = tagOf(image);
+
+  return tag === "" || tag.toLowerCase() === "latest";
+};
+
+/** Whether an OCI revision is the commit, in full or abbreviated to at least 7 characters. */
+export const revisionIsOfCommit = (revision: string, sha: string) =>
+  /^[0-9a-f]{7,}$/i.test(revision) && sha.toLowerCase().startsWith(revision.toLowerCase());
+
+/** Revisions named on a workload and on the pod template it creates. */
+export const imageRevisionsOf = (
+  ...sources: ({ annotations?: Readonly<Record<string, string>>; labels?: Readonly<Record<string, string>> } | undefined)[]
+): string[] => [
+  ...new Set(
+    sources.flatMap((source) => {
+      const revision = (source?.annotations?.[imageRevisionKey] ?? source?.labels?.[imageRevisionKey])?.trim();
+
+      return revision ? [revision] : [];
+    }),
+  ),
+];
 
 const withoutV = (tag: string) => tag.replace(/^v(?=\d)/, "");
 

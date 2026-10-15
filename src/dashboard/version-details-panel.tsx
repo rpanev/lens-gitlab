@@ -7,15 +7,15 @@ import { observer } from "mobx-react";
 import { type ReactNode, useEffect, useMemo } from "react";
 import { resourcesOfVersion } from "../deployments/version-resources";
 import { hostOf, isReleasesWatch, watchOfKey } from "../watched-repositories/watched-repository";
-import { openVersionInjectable } from "../workflow-runs/open-version.injectable";
-import { workflowsTitleOf } from "../workflow-runs/version";
+import { openVersionInjectable } from "../pipelines/open-version.injectable";
+import { pipelinesTitleOf } from "../pipelines/version";
 import { formatAge } from "./format-time-ago";
 import { selectedVersionInjectable } from "./selected-version.injectable";
 import { TableBox } from "./table-box";
 import { versionResourcesTableKind } from "./version-resources-table.injectable";
 import { watchOnClusterInjectable } from "./watch-on-cluster.injectable";
-import { WorkflowRunCards } from "./workflow-run-cards";
-import { openWorkflowsTabInjectable } from "./workflows-tab.injectable";
+import { PipelineCards } from "./pipeline-cards";
+import { openPipelinesTabInjectable } from "./pipelines-tab.injectable";
 
 const HeaderButton = ({
   onClick,
@@ -43,7 +43,7 @@ const VersionDetails = observer(
     const watchState = useInject(watchOnClusterInjectable)(clusterId, watchKey);
     const selected = useInject(selectedVersionInjectable)(clusterId);
     const openVersion = useInject(openVersionInjectable)();
-    const openWorkflowsTab = useInject(openWorkflowsTabInjectable)();
+    const openPipelinesTab = useInject(openPipelinesTabInjectable)();
     const params = useMemo(
       (): [string, string, string] => [clusterId, watchKey, versionId],
       [clusterId, watchKey, versionId],
@@ -77,7 +77,7 @@ const VersionDetails = observer(
             <ArrowOutwardIcon $size="s" />
           </HeaderButton>
           <HeaderButton
-            onClick={() => void openWorkflowsTab({ clusterId, watchKey, versionId, label: workflowsTitleOf(row) })}
+            onClick={() => void openPipelinesTab({ clusterId, watchKey, versionId, label: pipelinesTitleOf(row) })}
             tooltip="Open the pipelines in a tab, with each job and the end of a failed one's trace"
           >
             <FullscreenIcon $size="s" />
@@ -119,7 +119,7 @@ const VersionDetails = observer(
           </Section>
 
           <Section heading="Pipelines">
-            <WorkflowRunCards
+            <PipelineCards
               host={hostOf(watch)}
               project={watch.repository}
               row={row}
@@ -136,7 +136,7 @@ const VersionDetails = observer(
 
 /**
  * A version's details, sliding in over the dashboard from the right as a Kubernetes resource's do over
- * its list: what it is, what of the cluster runs it, and its workflows.
+ * its list: what it is, what of the cluster runs it, and its pipelines.
  */
 export const VersionDetailsPanel = observer(({ clusterId }: { clusterId: string }) => {
   const selected = useInject(selectedVersionInjectable)(clusterId);

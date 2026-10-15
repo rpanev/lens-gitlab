@@ -1,6 +1,6 @@
 import type { ClusterImages, DeployResource, GitSource, HelmChart, Workload } from "../src/deployments/cluster-images";
-import type { Version } from "../src/workflow-runs/version";
-import type { WorkflowRun } from "../src/workflow-runs/workflow-run";
+import type { Version } from "../src/pipelines/version";
+import type { Pipeline } from "../src/pipelines/pipeline";
 
 export const sha = (prefix: string) => prefix.padEnd(40, "0");
 
@@ -74,13 +74,13 @@ export const cluster = (overrides: Partial<ClusterImages> = {}): ClusterImages =
 });
 
 export const run = (
-  workflowName: string,
+  name: string,
   status = "completed",
   conclusion = "success",
   databaseId = 1,
-): WorkflowRun => ({
+): Pipeline => ({
   databaseId,
-  workflowName,
+  name,
   headBranch: "main",
   headSha: "0".repeat(40),
   event: "push",

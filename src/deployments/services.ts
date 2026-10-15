@@ -1,4 +1,4 @@
-import type { Version } from "../workflow-runs/version";
+import type { Version } from "../pipelines/version";
 import {
   type ClusterImages,
   type DeployResource,
@@ -6,7 +6,9 @@ import {
   type ImageAutomation,
   type ImageSelection,
   imageNameOf,
+  imageNeedsRevision,
   isSameOwner,
+  revisionIsOfCommit,
   type Workload,
 } from "./cluster-images";
 
@@ -19,7 +21,7 @@ export interface VersionOnTrack {
   readonly label: string;
   readonly at: string;
   readonly behind: number;
-  /** Its page on GitHub. */
+  /** Its page on GitLab. */
   readonly url: string;
 }
 
@@ -67,6 +69,28 @@ const versionOnTrackOf = (
   matches: ImageMatches,
 ): VersionOnTrack | undefined => {
   const behind = versions.findIndex((version) => matches(image, version));
+
+  if (behind === -1) return undefined;
+
+  const { id, label, at, url } = versions[behind];
+
+  return { id, label, at, url, behind };
+};
+
+/** A digest pin or `latest` takes its commit from the pod's revision when the tag does not name one. */
+const versionOfImage = (
+  image: string,
+  revisions: readonly string[] | undefined,
+  versions: readonly Version[],
+  matches: ImageMatches,
+): VersionOnTrack | undefined => {
+  const byTag = versionOnTrackOf(image, versions, matches);
+
+  if (byTag || !imageNeedsRevision(image)) return byTag;
+
+  const behind = versions.findIndex((version) =>
+    (revisions ?? []).some((revision) => revisionIsOfCommit(revision, version.id)),
+  );
 
   if (behind === -1) return undefined;
 
@@ -155,7 +179,7 @@ export const servicesOf = (
 
   for (const workload of workloads) {
     for (const image of workload.images) {
-      const onBranch = versionOnTrackOf(image, versions, matches);
+      const onBranch = versionOfImage(image, workload.revisions, versions, matches);
 
       if (!onBranch) continue;
 

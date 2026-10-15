@@ -12,11 +12,12 @@ import {
   watchKeyOf,
 } from "../watched-repositories/watched-repository";
 import { clusterRetrySeconds } from "../deployments/cluster-images.injectable";
-import { liveCheckSeconds } from "../workflow-runs/track-activity.injectable";
-import { versionsAsked, versionsWithRuns } from "../workflow-runs/track-sources.injectable";
-import { workflowsPassingOf } from "../workflow-runs/version";
+import { liveCheckSeconds } from "../pipelines/track-activity.injectable";
+import { versionsAsked, versionsWithRuns } from "../pipelines/track-sources.injectable";
+import { pipelinesPassingOf } from "../pipelines/version";
 import { gitOpsSyncsTableKind } from "./gitops-syncs-table.injectable";
-import { GlabProblemNotice } from "./gh-problem-notice";
+import { GlabProblemNotice } from "./glab-problem-notice";
+import { PromotionPanel } from "./promotion-panel";
 import { Panel } from "./panel";
 import { servicesTableKind } from "./services-table.injectable";
 import { StatCard } from "./stat-card";
@@ -41,7 +42,7 @@ export const RepositorySection = observer(({ clusterId, watch }: { clusterId: st
   const syncs = summary?.syncs ?? [];
   // A repository the cluster runs no images of, but applies with Flux or Argo CD: a GitOps repository.
   const gitOpsOnly = !!summary && summary.services.length === 0 && syncs.length > 0;
-  const workflows = workflowsPassingOf(rows);
+  const pipelines = pipelinesPassingOf(rows);
 
   // Follows GitLab and the cluster while the dashboard shows them, and stops when it does not.
   // Notifications follow it too, for as long as the dashboard shows it.
@@ -106,14 +107,20 @@ export const RepositorySection = observer(({ clusterId, watch }: { clusterId: st
         <StatCard
           icon={<RefreshIcon $size="m" />}
           title="Pipelines"
-          value={activity.status === "loaded" && workflows.ran > 0 ? `${workflows.passing}/${workflows.ran}` : "–"}
+          value={activity.status === "loaded" && pipelines.ran > 0 ? `${pipelines.passing}/${pipelines.ran}` : "–"}
           label={
-            activity.status === "loaded" && workflows.ran === 0
+            activity.status === "loaded" && pipelines.ran === 0
               ? `no runs of recent ${unit}s`
               : `recent ${unit}s passing`
           }
         />
       </Div>
+
+      <PromotionPanel
+        clusterId={clusterId}
+        watch={watch}
+        checkedAt={activity.status === "loaded" ? activity.checkedAt : undefined}
+      />
 
       <Panel heading={releases ? "Recent releases" : "Recent commits"} aside={`last ${versionsWithRuns}`}>
         <TableBox rows={rows.length || versionsWithRuns}>

@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { imageIsOfCommit, imageIsOfRelease, imageNameOf } from "../src/deployments/cluster-images";
+import {
+  imageIsOfCommit,
+  imageIsOfRelease,
+  imageNameOf,
+  imageNeedsRevision,
+  imageRevisionsOf,
+  revisionIsOfCommit,
+} from "../src/deployments/cluster-images";
 
 const sha = "76cd335b82ae2e8be6bad70826a64a8365d215a9";
 const registry = "841601950514.dkr.ecr.eu-west-1.amazonaws.com";
@@ -33,6 +40,39 @@ describe("imageIsOfRelease", () => {
     ["backend:version", "version", true], // only a v before a digit is dropped
   ])("%s for %s → %s", (image, tag, expected) => {
     expect(imageIsOfRelease(image, tag)).toBe(expected);
+  });
+});
+
+describe("imageNeedsRevision", () => {
+  it.each([
+    ["app@sha256:abc", true],
+    ["app:latest", true],
+    ["app:latest@sha256:abc", true],
+    ["app:main-76cd335", false],
+    ["app:1.2.3", false],
+  ])("%s → %s", (image, expected) => {
+    expect(imageNeedsRevision(image)).toBe(expected);
+  });
+});
+
+describe("revisionIsOfCommit", () => {
+  it("matches the commit in full or abbreviated to at least 7 characters", () => {
+    expect(revisionIsOfCommit(sha, sha)).toBe(true);
+    expect(revisionIsOfCommit("76cd335", sha)).toBe(true);
+    expect(revisionIsOfCommit("76cd33", sha)).toBe(false);
+    expect(revisionIsOfCommit("latest", sha)).toBe(false);
+  });
+});
+
+describe("imageRevisionsOf", () => {
+  it("reads the OCI revision from an annotation or a label, once", () => {
+    expect(
+      imageRevisionsOf(
+        { annotations: { "org.opencontainers.image.revision": sha } },
+        { labels: { "org.opencontainers.image.revision": sha } },
+        { annotations: { "org.opencontainers.image.revision": "  abcdef0  " } },
+      ),
+    ).toEqual([sha, "abcdef0"]);
   });
 });
 

@@ -1,7 +1,7 @@
 import { A, Div, Span } from "@k8slens/element-components";
 import { useInject } from "@k8slens/use-inject";
-import type { GlabProblem } from "../workflow-runs/glab-problems";
-import { openVersionInjectable } from "../workflow-runs/open-version.injectable";
+import type { GlabProblem } from "../pipelines/glab-problems";
+import { openVersionInjectable } from "../pipelines/open-version.injectable";
 
 /** Why GitLab could not be read for a watch, what to do about it, and what the CLI said on hover. */
 export const GlabProblemNotice = ({ problem, hadData }: { problem: GlabProblem; hadData: boolean }) => {

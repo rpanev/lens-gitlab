@@ -4,10 +4,10 @@ import { PlainButton, PrimaryButton } from "@k8slens/input-components";
 import { ModalContainer, ModalContent, ModalFooter, ModalHeader } from "@k8slens/modal-components";
 import { getModalInjectableBunch, getModalKind, type ModalProps, useRespondFromModal } from "@k8slens/modal-contracts";
 
-/** Asks before re-running a workflow's failed jobs, which starts CI on GitLab. */
-export const rerunModalKind = getModalKind<[workflowName: string, version: string], boolean>()("rerun-failed-jobs");
+/** Asks before re-running a pipeline's failed jobs, which starts CI on GitLab. */
+export const rerunModalKind = getModalKind<[name: string, version: string], boolean>()("rerun-failed-jobs");
 
-const RerunModal = ({ input: [workflowName, version] }: ModalProps<typeof rerunModalKind>) => {
+const RerunModal = ({ input: [name, version] }: ModalProps<typeof rerunModalKind>) => {
   const respond = useRespondFromModal(rerunModalKind);
 
   return (
@@ -15,7 +15,7 @@ const RerunModal = ({ input: [workflowName, version] }: ModalProps<typeof rerunM
       <ModalHeader icon={<WarningIcon />}>Re-run failed jobs</ModalHeader>
       <ModalContent>
         <P>
-          Re-run the failed jobs of {workflowName} for {version}? This starts them again on GitLab.
+          Re-run the failed jobs of {name} for {version}? This starts them again on GitLab.
         </P>
       </ModalContent>
       <ModalFooter>

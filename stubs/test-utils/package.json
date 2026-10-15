@@ -1,0 +1,6 @@
+{
+  "name": "@k8slens/test-utils",
+  "version": "0.0.0",
+  "description": "Stand-in for the Lens test helper this extension never loads.",
+  "main": "index.js"
+}

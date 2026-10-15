@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { failedLogLinesOf } from "../src/workflow-runs/failed-log";
-import { failedLogInjectable } from "../src/workflow-runs/failed-log.injectable";
+import { failedLogLinesOf } from "../src/pipelines/failed-log";
+import { failedLogInjectable } from "../src/pipelines/failed-log.injectable";
 
 // Shaped like a GitLab job trace: a timestamp and stream marker, colours, and section markers.
 const output = [

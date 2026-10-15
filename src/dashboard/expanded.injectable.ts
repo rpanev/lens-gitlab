@@ -2,8 +2,8 @@ import { getInjectable2 } from "@k8slens/injectable";
 import { action, observable } from "mobx";
 
 /**
- * What the user opened or closed in one place, such as one workflows tab, by id; what they did not touch
- * opens as it would by default, which can change, as a workflow that fails opens.
+ * What the user opened or closed in one place, such as one pipelines tab, by id; what they did not touch
+ * opens as it would by default, which can change, as a pipeline that fails opens.
  */
 export const expandedInjectable = getInjectable2({
   id: "lens-gitlab-expanded",

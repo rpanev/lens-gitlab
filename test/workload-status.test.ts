@@ -42,6 +42,21 @@ describe("deploymentStatusOf", () => {
       }),
     ).toEqual({ rolledOut: false, ready: 1, desired: 2, settledAt: undefined });
   });
+
+  it("is stalled once the rollout hits its progress deadline", () => {
+    expect(
+      deploymentStatusOf({
+        metadata: { generation: 4 },
+        spec: { replicas: 2 },
+        status: {
+          observedGeneration: 4,
+          updatedReplicas: 1,
+          readyReplicas: 1,
+          conditions: [{ type: "Progressing", reason: "ProgressDeadlineExceeded" }],
+        },
+      }).stalled,
+    ).toBe(true);
+  });
 });
 
 describe("statefulSetStatusOf and daemonSetStatusOf", () => {

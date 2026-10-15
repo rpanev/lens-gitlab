@@ -31,14 +31,14 @@ describe("changesBetween", () => {
   });
 
   it("tells a version failing CI once", () => {
-    const failed = { id: "b", label: "bbbbbbb", failedWorkflows: ["build"] };
+    const failed = { id: "b", label: "bbbbbbb", failedPipelines: ["build"] };
     const first = changesBetween(
-      reading({ newest: { id: "a", label: "aaaaaaa", failedWorkflows: [] } }),
+      reading({ newest: { id: "a", label: "aaaaaaa", failedPipelines: [] } }),
       reading({ newest: failed }),
     );
     const again = changesBetween(reading({ newest: failed }), reading({ newest: failed }));
 
-    expect(first).toEqual([{ kind: "ci-failed", label: "bbbbbbb", workflows: ["build"] }]);
+    expect(first).toEqual([{ kind: "ci-failed", label: "bbbbbbb", pipelines: ["build"] }]);
     expect(again).toEqual([]);
   });
 
@@ -57,8 +57,8 @@ describe("changesBetween", () => {
   });
 
   it("tells once that nothing can be read", () => {
-    expect(changesBetween(reading(), reading({ unreadable: "gh is not signed in" }))).toEqual([
-      { kind: "unreadable", message: "gh is not signed in" },
+    expect(changesBetween(reading(), reading({ unreadable: "glab is not signed in" }))).toEqual([
+      { kind: "unreadable", message: "glab is not signed in" },
     ]);
     expect(changesBetween(reading({ unreadable: "x" }), reading({ unreadable: "x" }))).toEqual([]);
   });

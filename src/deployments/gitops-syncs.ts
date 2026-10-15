@@ -1,4 +1,4 @@
-import type { Version } from "../workflow-runs/version";
+import type { Version } from "../pipelines/version";
 import type { ClusterImages, DeployResource, GitSource } from "./cluster-images";
 import type { VersionOnTrack } from "./services";
 

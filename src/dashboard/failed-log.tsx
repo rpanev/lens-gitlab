@@ -2,9 +2,9 @@ import { A, Div, Pre, Span } from "@k8slens/element-components";
 import { useInject } from "@k8slens/use-inject";
 import { observer } from "mobx-react";
 import { useEffect } from "react";
-import { failedLogInjectable } from "../workflow-runs/failed-log.injectable";
-import { openVersionInjectable } from "../workflow-runs/open-version.injectable";
-import type { RunJob } from "../workflow-runs/run-jobs";
+import { failedLogInjectable } from "../pipelines/failed-log.injectable";
+import { openVersionInjectable } from "../pipelines/open-version.injectable";
+import type { RunJob } from "../pipelines/run-jobs";
 
 const logColors = { error: "critical", warning: "warning", plain: undefined } as const;
 

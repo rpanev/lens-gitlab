@@ -1,8 +1,8 @@
 import { serviceLookOf } from "../dashboard/flux-stage";
 import type { GitOpsSync } from "../deployments/gitops-syncs";
 import type { Service } from "../deployments/services";
-import { runStatusOf } from "../workflow-runs/run-status";
-import type { VersionRuns } from "../workflow-runs/version";
+import { runStatusOf } from "../pipelines/run-status";
+import type { VersionRuns } from "../pipelines/version";
 
 export interface Failure {
   readonly message: string;
@@ -20,7 +20,7 @@ const failedVersionOf = (service: Service) =>
 /** What notifications compare from one check to the next, for one watch on one cluster. */
 export interface Reading {
   /** The newest version, and whether its CI failed, once its runs have all finished. */
-  readonly newest?: { readonly id: string; readonly label: string; readonly failedWorkflows: readonly string[] };
+  readonly newest?: { readonly id: string; readonly label: string; readonly failedPipelines: readonly string[] };
   /** What fails to apply, by name, with why and the version that fails, when known. */
   readonly failing: ReadonlyMap<string, Failure>;
   /** What is being applied again, by the same names: a retry, which does not end a failure. */
@@ -50,9 +50,9 @@ export const readingOf = ({
         ? {
             id: newest.version.id,
             label: newest.version.label,
-            failedWorkflows: newest.runs
+            failedPipelines: newest.runs
               .filter((run) => runStatusOf(run).color === "critical")
-              .map((run) => run.workflowName),
+              .map((run) => run.name),
           }
         : undefined,
     failing: new Map([
@@ -90,7 +90,7 @@ export const readingOf = ({
 export type Change =
   /** Services that settled on a newer version, by the version. */
   | { readonly kind: "live"; readonly label: string; readonly services: readonly string[] }
-  | { readonly kind: "ci-failed"; readonly label: string; readonly workflows: readonly string[] }
+  | { readonly kind: "ci-failed"; readonly label: string; readonly pipelines: readonly string[] }
   | { readonly kind: "failing"; readonly name: string; readonly message: string }
   | { readonly kind: "unreadable"; readonly message: string };
 
@@ -108,10 +108,10 @@ export const changesBetween = (previous: Reading | undefined, next: Reading): Ch
   // A version that failed is told once: when its runs finish, or when it is first seen finished.
   if (
     next.newest &&
-    next.newest.failedWorkflows.length > 0 &&
-    (previous.newest?.id !== next.newest.id || previous.newest.failedWorkflows.length === 0)
+    next.newest.failedPipelines.length > 0 &&
+    (previous.newest?.id !== next.newest.id || previous.newest.failedPipelines.length === 0)
   )
-    changes.push({ kind: "ci-failed", label: next.newest.label, workflows: next.newest.failedWorkflows });
+    changes.push({ kind: "ci-failed", label: next.newest.label, pipelines: next.newest.failedPipelines });
 
   // Newly failing, or failing on another version than before: a retry of the same one tells nothing, and
   // neither does a version known on one side only, since it cannot tell another version apart.

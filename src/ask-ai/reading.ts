@@ -2,11 +2,11 @@ import type { DashboardHealth } from "../dashboard/dashboard-health.injectable";
 import type { VersionRow } from "../dashboard/watch-on-cluster.injectable";
 import { serviceStatusOf, syncStatusOf } from "../dashboard/flux-stage";
 import type { ClusterImagesState } from "../deployments/cluster-images.injectable";
-import { urlOnHost } from "../workflow-runs/browser-url";
+import { urlOnHost } from "../pipelines/browser-url";
 import { projectInputOf } from "../watched-repositories/watch-input";
 import { followedLabelOf, hostOf, isReleasesWatch, type WatchedRepository } from "../watched-repositories/watched-repository";
-import { summaryOf } from "../workflow-runs/version";
-import type { TrackActivityState } from "../workflow-runs/track-activity.injectable";
+import { summaryOf } from "../pipelines/version";
+import type { TrackActivityState } from "../pipelines/track-activity.injectable";
 
 const bannerLabels: Record<DashboardHealth["state"] | "not-configured", string> = {
   checking: "Checking",
@@ -199,7 +199,7 @@ export const projectPipelinesReadingOf = (
               pipelineSummary: row.runsOn ? `${summary.text} (on ${row.runsOn})` : summary.text,
               pipelineStatus: summary.status?.label ?? null,
               pipelines: row.runs.map((run) => ({
-                name: run.workflowName,
+                name: run.name,
                 status: summaryOf({ runs: [run] }).status?.label ?? run.conclusion,
                 url: urlOnHost(run.url, host) ?? null,
               })),

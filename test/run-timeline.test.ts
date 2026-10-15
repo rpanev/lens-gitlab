@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { barOf, formatSpan, spanOf, stepSegmentsOf } from "../src/workflow-runs/run-timeline";
+import { barOf, formatSpan, spanOf, stepSegmentsOf } from "../src/pipelines/run-timeline";
 
 const t = (seconds: number) => new Date(Date.parse("2026-10-02T10:00:00Z") + seconds * 1000).toISOString();
 

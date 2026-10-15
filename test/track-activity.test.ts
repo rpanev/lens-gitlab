@@ -1,11 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { watchKeyOf } from "../src/watched-repositories/watched-repository";
-import { trackActivityInjectable } from "../src/workflow-runs/track-activity.injectable";
+import { trackActivityInjectable } from "../src/pipelines/track-activity.injectable";
 import { commit, run } from "./fixtures";
 
 const settle = () => vi.advanceTimersByTimeAsync(0);
 
-describe("checking when gh fails", () => {
+describe("checking when glab fails", () => {
   let failure: string | undefined;
   let calls = 0;
 
@@ -35,7 +35,22 @@ describe("checking when gh fails", () => {
 
   afterEach(() => vi.useRealTimers());
 
-  it("pauses while gh is signed out, and resumes when checked again", async () => {
+  it("shares one check across clusters watching the same project", async () => {
+    failure = undefined;
+    const factory = (trackActivityInjectable as any).instantiate({ inject: () => () => () => source });
+    const key = watchKeyOf({ repository: "o/app", branch: "main", intervalMinutes: 5 });
+    const dev = factory(key);
+    const prod = factory(key);
+
+    expect(prod).toBe(dev);
+    dev.watch();
+    prod.watch();
+    await settle();
+
+    expect(calls).toBe(1);
+  });
+
+  it("pauses while glab is signed out, and resumes when checked again", async () => {
     failure = "fatal: not authenticated. please run `glab auth login`";
     const activity = activityOf();
 

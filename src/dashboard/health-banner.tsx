@@ -10,6 +10,7 @@ import {
 import { useInject } from "@k8slens/use-inject";
 import { observer } from "mobx-react";
 import type { DashboardHealth } from "./dashboard-health.injectable";
+import { openDoraTabInjectable } from "./dora-tab.injectable";
 import { dashboardHealthInjectable } from "./dashboard-health.injectable";
 
 type Color = "success" | "critical" | "notice" | "primary" | "grey60";
@@ -48,6 +49,7 @@ interface HealthBannerProps {
 
 export const HealthBanner = observer(({ clusterId, aside, onSettings }: HealthBannerProps) => {
   const health = useInject(dashboardHealthInjectable)(clusterId).get();
+  const openDora = useInject(openDoraTabInjectable)();
   const { label, color } = looks[health.state];
 
   return (
@@ -60,6 +62,15 @@ export const HealthBanner = observer(({ clusterId, aside, onSettings }: HealthBa
       <Span $color={color === "grey60" ? "textMuted" : color}>{label}</Span>
       <Span $flexChild>{health.message}</Span>
       <Span $color="textMuted">{aside}</Span>
+      <Button
+        $onClick={() => void openDora(clusterId)}
+        $tooltip="Open DORA"
+        $interactive
+        $border={{ color: "borderPrimary", width: "xxs", radius: "s" }}
+        $padding={{ horizontal: "m", vertical: "xs" }}
+      >
+        <Span>DORA</Span>
+      </Button>
       <Button $onClick={onSettings} $tooltip="GitLabOps settings" $interactive>
         <SettingsIcon $size="s" />
       </Button>

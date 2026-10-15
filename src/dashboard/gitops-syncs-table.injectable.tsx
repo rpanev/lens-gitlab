@@ -9,7 +9,7 @@ import {
 import { useInject } from "@k8slens/use-inject";
 import type { GitOpsSync } from "../deployments/gitops-syncs";
 import { openResourceDetailsInjectable } from "../deployments/open-resource-details.injectable";
-import { openVersionInjectable } from "../workflow-runs/open-version.injectable";
+import { openVersionInjectable } from "../pipelines/open-version.injectable";
 import { syncStatusOf } from "./flux-stage";
 import { columnHeader, getWatchRowsBunch, type WatchTableParams } from "./watch-table";
 

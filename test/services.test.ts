@@ -54,6 +54,25 @@ describe("servicesOf", () => {
     expect(service.rollingOut).toBe(true);
   });
 
+  it("matches a digest-pinned image, and latest, by the pod revision", () => {
+    const services = servicesOf(
+      commits,
+      byCommit,
+      cluster({
+        workloads: [
+          workload("backend", "r/backend@sha256:abc", { revisions: [sha("aaaaaaa")] }),
+          workload("worker", "r/worker:latest@sha256:def", { revisions: [sha("bbbbbbb")] }),
+          workload("sidecar", "quay.io/k8slens/bored:0.10.4", { revisions: [sha("aaaaaaa")] }),
+        ],
+      }),
+    );
+
+    expect(services.map((service) => [service.name, service.running?.label])).toEqual([
+      ["backend", "aaaaaaa"],
+      ["worker", "bbbbbbb"],
+    ]);
+  });
+
   it("matches releases by tag", () => {
     const [service] = servicesOf(
       [release("v2026.9.3-rc.1"), release("v2026.9.2")],

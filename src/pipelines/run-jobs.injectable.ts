@@ -6,7 +6,7 @@ import { glabInjectable } from "./glab.injectable";
 import { isFinished, type RunJob, type RunStep } from "./run-jobs";
 import { liveCheckSeconds } from "./track-activity.injectable";
 import { urlOnHost } from "./browser-url";
-import { runStateOf } from "./workflow-run";
+import { runStateOf } from "./pipeline";
 
 export type RunJobsState =
   | { readonly status: "loading" }
